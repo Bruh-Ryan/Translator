@@ -43,7 +43,7 @@ Never commit this file. It is already excluded by `.gitignore`.
 
 ## Web app
 
-The whole flow also runs as a small web page: paste a video URL, pick a language, then play or download the translated MP3. When that is ready, a **Create MP4 video** button downloads the source video, merges it with the translated audio, and stores the result on Vercel Blob — preview and download the finished video right from the page.
+The whole flow also runs as a small web page: paste a video URL and pick a language — the page returns the **translated video**. When the translation is ready, the server downloads the source video, merges it with the translated audio, and stores the finished MP4 on Vercel Blob, where the page previews it and offers a download button. The translated MP3 stays available under "Audio only (MP3)".
 
 Run it locally (it reads `.env` like the CLI does):
 
@@ -66,7 +66,7 @@ LLM_MODEL=gpt-4.1-mini                       # default model
 LLM_BASE_URL=https://openrouter.ai/api/v1    # any OpenAI-compatible endpoint
 ```
 
-The chat only starts the job; the MP3 and the MP4 button then arrive through the same flow as the form.
+The chat only starts the job; the translated video then arrives through the same flow as the form.
 
 ### Deploy to Vercel
 
@@ -75,10 +75,10 @@ The chat only starts the job; the MP3 and the MP4 button then arrive through the
    - `ELEVENLABS_API_KEY` — your API key (`.env` is never deployed).
    - `APP_PASSWORD` — optional. When set, visitors must type this shared password before the page can spend any credits.
    - `LLM_API_KEY` (plus optional `LLM_MODEL`, `LLM_BASE_URL`) — optional. Enables the chat assistant; see above.
-   - `BLOB_READ_WRITE_TOKEN` — needed for the MP4 button. Create a Blob store in the **Storage** tab and connect it to this project; Vercel adds the variable automatically.
+   - `BLOB_READ_WRITE_TOKEN` — needed for the MP4 output. Create a Blob store in the **Storage** tab and connect it to this project; Vercel adds the variable automatically.
 3. Deploy, or redeploy after adding the variables.
 
-The page creates an ElevenLabs job, then polls it from the browser until the audio is ready. Building the MP4 is one longer call (usually under two minutes) that streams its progress to the page.
+The page creates an ElevenLabs job, then polls it from the browser until the translation is ready; the MP4 build then starts automatically and streams its progress to the page (usually under two minutes). After a page reload it shows the result with a "Build the translated video" button instead of rebuilding on its own.
 
 ### Web app limits
 

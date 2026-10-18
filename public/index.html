@@ -11,7 +11,7 @@
   <main class="card">
     <header>
       <h1>Video Translator</h1>
-      <p class="subtitle">Paste a video link — or just describe what you want — and download the dubbed audio, plus the full translated MP4. Powered by the ElevenLabs Dubbing API.</p>
+      <p class="subtitle">Paste a video link — or just describe what you want — and get back the translated video. Powered by the ElevenLabs Dubbing API.</p>
     </header>
 
     <div id="setup-warning" class="notice warn hidden" role="alert"></div>
@@ -82,14 +82,9 @@
     </section>
 
     <section id="result" class="hidden">
-      <h2>Translation ready</h2>
-      <audio id="player" controls></audio>
-      <a id="download" class="button" download>Download MP3</a>
+      <h2>Your translated video</h2>
 
-      <div id="mp4-block" class="hidden">
-        <h3>Want the full video?</h3>
-        <p class="muted">Build an MP4 with the original picture and the translated audio. Works best for clips up to about three minutes.</p>
-        <button type="button" id="mp4-button">Create MP4 video</button>
+      <div id="mp4-block">
         <div id="mp4-progress" class="hidden">
           <div class="spinner" aria-hidden="true"></div>
           <p id="mp4-status" class="muted"></p>
@@ -98,14 +93,22 @@
           <video id="mp4-player" controls playsinline></video>
           <a id="mp4-download" class="button" download>Download MP4</a>
         </div>
+        <div id="mp4-failed" class="hidden">
+          <p id="mp4-error" class="muted"></p>
+          <button type="button" id="mp4-button">Build the translated video</button>
+        </div>
       </div>
+
+      <details id="audio-only">
+        <summary>Audio only (MP3)</summary>
+        <div class="grid">
+          <audio id="player" controls></audio>
+          <a id="download" class="button" download>Download MP3</a>
+        </div>
+      </details>
     </section>
 
     <div id="error" class="notice error hidden" role="alert"></div>
-
-    <footer class="muted">
-      The translated MP3 and the merged MP4 are built on the server. MP4 files are hosted on Vercel Blob so the download link can be shared.
-    </footer>
   </main>
   <script src="/app.js"></script>
 </body>

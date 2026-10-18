@@ -18,13 +18,14 @@ const els = {
   result: document.querySelector("#result"),
   player: document.querySelector("#player"),
   download: document.querySelector("#download"),
-  mp4Block: document.querySelector("#mp4-block"),
   mp4Button: document.querySelector("#mp4-button"),
   mp4Progress: document.querySelector("#mp4-progress"),
   mp4Status: document.querySelector("#mp4-status"),
   mp4Result: document.querySelector("#mp4-result"),
   mp4Player: document.querySelector("#mp4-player"),
   mp4Download: document.querySelector("#mp4-download"),
+  mp4Failed: document.querySelector("#mp4-failed"),
+  mp4Error: document.querySelector("#mp4-error"),
   error: document.querySelector("#error"),
   tabForm: document.querySelector("#tab-form"),
   tabChat: document.querySelector("#tab-chat"),
@@ -179,6 +180,7 @@ async function startJob(event) {
   state.target = els.to.value;
   state.source = url;
   state.filename = null;
+  state.autoBuild = true;
   setBusy(true);
   showProgress("Creating the dubbing job…");
 
@@ -251,6 +253,14 @@ async function fetchAudio() {
   setBusy(false);
   clearJob();
   resetMp4();
+  if (state.autoBuild) {
+    // The translated video is the final output; start building it right away.
+    state.autoBuild = false;
+    createVideo();
+  } else {
+    // Restored session: let the user start the build when they want it.
+    showMp4Action("");
+  }
 }
 
 function restoreJob() {
@@ -374,6 +384,7 @@ async function sendChat(event) {
       state.filename = data.job.filename;
       state.expected = data.job.expected_duration_sec || 0;
       state.startedAt = Date.now();
+      state.autoBuild = true;
       saveJob();
       showProgress("Waiting for ElevenLabs…", progressDetail());
       poll();
@@ -407,13 +418,11 @@ const MP4_STAGES = {
 };
 
 function resetMp4() {
-  els.mp4Block.classList.toggle("hidden", !state.source);
-  els.mp4Button.classList.remove("hidden");
-  els.mp4Button.disabled = false;
-  els.mp4Button.textContent = "Create MP4 video";
   els.mp4Progress.classList.add("hidden");
   els.mp4Result.classList.add("hidden");
+  els.mp4Failed.classList.add("hidden");
   els.mp4Status.textContent = "";
+  els.mp4Error.textContent = "";
   els.mp4Player.removeAttribute("src");
 }
 
@@ -422,10 +431,20 @@ function setMp4Stage(text) {
   els.mp4Status.textContent = text;
 }
 
+function showMp4Action(message) {
+  els.mp4Progress.classList.add("hidden");
+  els.mp4Result.classList.add("hidden");
+  els.mp4Failed.classList.remove("hidden");
+  els.mp4Error.textContent = message || "";
+  els.mp4Error.classList.toggle("hidden", !message);
+  els.mp4Button.disabled = false;
+  els.mp4Button.textContent = message ? "Try again" : "Build the translated video";
+}
+
 function showMp4(data) {
   els.mp4Progress.classList.add("hidden");
+  els.mp4Failed.classList.add("hidden");
   els.mp4Result.classList.remove("hidden");
-  els.mp4Button.classList.add("hidden");
   els.mp4Player.src = data.url;
   els.mp4Download.href = data.download_url || data.url;
   els.mp4Download.download = data.filename || "translated.mp4";
@@ -437,7 +456,7 @@ async function createVideo() {
   if (!state.jobId || !state.source) return;
   clearError();
   els.mp4Button.disabled = true;
-  els.mp4Button.textContent = "Building the video…";
+  els.mp4Failed.classList.add("hidden");
   setMp4Stage("Starting…");
 
   try {
@@ -493,8 +512,7 @@ async function createVideo() {
     }
     showMp4(finished);
   } catch (error) {
-    resetMp4();
-    handleError(error);
+    showMp4Action(error.message || String(error));
   }
 }
 

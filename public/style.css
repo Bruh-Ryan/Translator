@@ -201,13 +201,6 @@ video {
 #mp4-block {
   display: grid;
   gap: 10px;
-  border-top: 1px solid var(--border);
-  padding-top: 14px;
-}
-
-#mp4-block h3 {
-  margin: 0;
-  font-size: 15px;
 }
 
 #mp4-progress {
@@ -223,6 +216,30 @@ video {
 #mp4-result {
   display: grid;
   gap: 10px;
+}
+
+#mp4-failed {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+#mp4-failed p {
+  margin: 0;
+}
+
+#audio-only {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+#audio-only summary {
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#audio-only .grid {
+  margin-top: 10px;
 }
 
 .notice {

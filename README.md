@@ -2,7 +2,7 @@
 
 Download a video-only source from YouTube, translate its spoken content with the ElevenLabs Dubbing API, then replace the video's audio with the translated track.
 
-There are three front doors for that flow: the `cli.py` command line (it also does the FFmpeg merge), a small FastAPI web page (`app.py` + `public/`) that runs the dubbing step in a browser and deploys to Vercel, and an MCP server (`mcp_server.py`) that exposes the whole pipeline — download, dub, merge — as tools for local agents such as OpenCode.
+There are three front doors for that flow: the `cli.py` command line, a small FastAPI web page (`app.py` + `public/`) that runs the whole pipeline in a browser — MP3 *and* the merged MP4 — and deploys to Vercel, and an MCP server (`mcp_server.py`) that exposes the pipeline as tools for local agents such as OpenCode.
 
 ## What it does
 
@@ -17,6 +17,7 @@ ElevenLabs controls the dubbing timing and delivery. For recognizable voice pres
 
 - Python 3.10 or later
 - [FFmpeg](https://ffmpeg.org/download.html), available on your `PATH` (required for the final MP4 export)
+- For YouTube downloads: Node.js 22+ if present, otherwise the bundled `vendor/qjs` is used automatically as the JavaScript runtime `yt-dlp` needs
 - An ElevenLabs account, API key, and sufficient Dubbing credits
 - An ElevenLabs API key with the `dubbing_write` permission
 
@@ -42,7 +43,7 @@ Never commit this file. It is already excluded by `.gitignore`.
 
 ## Web app
 
-The dubbing step also runs as a small web page: paste a video URL, pick a language, then play or download the translated MP3. It is built for Vercel, where video downloads and FFmpeg are not available, so the page produces the MP3 only.
+The whole flow also runs as a small web page: paste a video URL, pick a language, then play or download the translated MP3. When that is ready, a **Create MP4 video** button downloads the source video, merges it with the translated audio, and stores the result on Vercel Blob — preview and download the finished video right from the page.
 
 Run it locally (it reads `.env` like the CLI does):
 
@@ -65,7 +66,7 @@ LLM_MODEL=gpt-4.1-mini                       # default model
 LLM_BASE_URL=https://openrouter.ai/api/v1    # any OpenAI-compatible endpoint
 ```
 
-The chat only starts the job; the MP3 still arrives through the same polling and download flow as the form, and the final MP4 merge stays on your machine.
+The chat only starts the job; the MP3 and the MP4 button then arrive through the same flow as the form.
 
 ### Deploy to Vercel
 
@@ -74,14 +75,16 @@ The chat only starts the job; the MP3 still arrives through the same polling and
    - `ELEVENLABS_API_KEY` — your API key (`.env` is never deployed).
    - `APP_PASSWORD` — optional. When set, visitors must type this shared password before the page can spend any credits.
    - `LLM_API_KEY` (plus optional `LLM_MODEL`, `LLM_BASE_URL`) — optional. Enables the chat assistant; see above.
+   - `BLOB_READ_WRITE_TOKEN` — needed for the MP4 button. Create a Blob store in the **Storage** tab and connect it to this project; Vercel adds the variable automatically.
 3. Deploy, or redeploy after adding the variables.
 
-The page creates an ElevenLabs job, then polls it from the browser until the audio is ready — no long-running server process and no storage needed.
+The page creates an ElevenLabs job, then polls it from the browser until the audio is ready. Building the MP4 is one longer call (usually under two minutes) that streams its progress to the page.
 
 ### Web app limits
 
-- Vercel caps function responses at about 4.5 MB, so very long videos may not download through the browser. Use the CLI for those.
-- Video downloads, file uploads, and the final MP4 merge stay on your machine.
+- The MP4 build downloads the source video from Vercel's servers, so YouTube has to allow it. Shorts and ordinary videos usually work; if YouTube refuses (bot check), the error message suggests the CLI instead.
+- The web version handles clips up to about three minutes (`MAX_VIDEO_SECONDS`, default 180) and 1080p (`MAX_VIDEO_HEIGHT`). The CLI has no such limits.
+- Vercel caps a single function response at about 4.5 MB, which is why finished MP4s are stored on Vercel Blob. Keep the Blob store connected, or the MP4 step stops with a clear message.
 - Unless `APP_PASSWORD` is set, anyone who can open the URL can spend your ElevenLabs credits.
 - The chat assistant adds a language-model round trip to each message. If a turn times out on Vercel, raise the function's max duration in the Vercel project settings.
 
@@ -209,10 +212,12 @@ translator/
 ├── cli.py             # Command line: download sources, dub, merge
 ├── core.py            # Shared ElevenLabs dubbing logic
 ├── app.py             # FastAPI web app (the Vercel entrypoint)
+├── video_job.py       # Server-side MP4 build: yt-dlp + FFmpeg + Vercel Blob
 ├── agent.py           # Chat assistant for app.py (needs LLM_API_KEY)
 ├── mcp_server.py      # MCP tools for local agents (OpenCode, Claude Desktop)
 ├── public/            # Frontend: index.html, style.css, app.js
 ├── requirements.txt
+├── vercel.json        # Function settings (300s max duration) on Vercel
 ├── .env               # Your local API key (not committed)
 ├── video/             # Downloaded video-only sources (not committed)
 └── translation/       # Generated MP3/MP4 translations (not committed)
@@ -230,6 +235,8 @@ translator/
 | `The chat agent is not configured` | Set `LLM_API_KEY` (plus optional `LLM_MODEL`, `LLM_BASE_URL`) in the environment and restart or redeploy. |
 | `The language model request failed` | Check `LLM_API_KEY`, `LLM_MODEL`, and `LLM_BASE_URL`; the endpoint must be OpenAI-compatible. |
 | `The server has no ElevenLabs API key yet` | Add `ELEVENLABS_API_KEY` in Vercel → Settings → Environment Variables, then redeploy. |
+| `BLOB_READ_WRITE_TOKEN is missing` | Create a Blob store in Vercel's **Storage** tab and connect it to the project, then redeploy. |
+| `YouTube refused the download from this server` | Vercel's data-centre address was bot-checked. Try again, use another video, or merge on your machine: `python cli.py merge`. |
 | Vercel asks for a login before the page loads | Deployment Protection is on (Vercel → Settings → Deployment Protection). Turn it off, or log in with the Vercel account that owns the project. |
 
 ## Configuration
@@ -241,7 +248,7 @@ $env:VIDEO_DIR = "E:\VideoTranslator\video"
 $env:TRANSLATION_DIR = "E:\VideoTranslator\translation"
 ```
 
-The web app's chat assistant reads `LLM_API_KEY`, `LLM_MODEL` (default: `gpt-4.1-mini`), and `LLM_BASE_URL` from the same environment.
+The web app's chat assistant reads `LLM_API_KEY`, `LLM_MODEL` (default: `gpt-4.1-mini`), and `LLM_BASE_URL` from the same environment. The MP4 step reads `BLOB_READ_WRITE_TOKEN` (where finished videos are stored) plus the optional `MAX_VIDEO_SECONDS` (default `180`) and `MAX_VIDEO_HEIGHT` (default `1080`).
 
 ## Notes
 

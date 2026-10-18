@@ -11,7 +11,7 @@
   <main class="card">
     <header>
       <h1>Video Translator</h1>
-      <p class="subtitle">Paste a video link — or just describe what you want — and download the dubbed MP3. Powered by the ElevenLabs Dubbing API.</p>
+      <p class="subtitle">Paste a video link — or just describe what you want — and download the dubbed audio, plus the full translated MP4. Powered by the ElevenLabs Dubbing API.</p>
     </header>
 
     <div id="setup-warning" class="notice warn hidden" role="alert"></div>
@@ -85,13 +85,26 @@
       <h2>Translation ready</h2>
       <audio id="player" controls></audio>
       <a id="download" class="button" download>Download MP3</a>
-      <p class="muted">This is the dubbed audio only. To combine it with the source video, run <code>python cli.py merge</code> (or the FFmpeg command from the README) on your machine.</p>
+
+      <div id="mp4-block" class="hidden">
+        <h3>Want the full video?</h3>
+        <p class="muted">Build an MP4 with the original picture and the translated audio. Works best for clips up to about three minutes.</p>
+        <button type="button" id="mp4-button">Create MP4 video</button>
+        <div id="mp4-progress" class="hidden">
+          <div class="spinner" aria-hidden="true"></div>
+          <p id="mp4-status" class="muted"></p>
+        </div>
+        <div id="mp4-result" class="hidden">
+          <video id="mp4-player" controls playsinline></video>
+          <a id="mp4-download" class="button" download>Download MP4</a>
+        </div>
+      </div>
     </section>
 
     <div id="error" class="notice error hidden" role="alert"></div>
 
     <footer class="muted">
-      Downloads and the final MP4 merge stay on your machine — this page only produces the translated MP3.
+      The translated MP3 and the merged MP4 are built on the server. MP4 files are hosted on Vercel Blob so the download link can be shared.
     </footer>
   </main>
   <script src="/app.js"></script>

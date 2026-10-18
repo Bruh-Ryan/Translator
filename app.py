@@ -3,10 +3,20 @@
 Deployed on Vercel, where the entrypoint is the top-level `app` object below.
 Dubbing is asynchronous, so the page creates a job, polls for its status, and
 then streams the finished MP3 back — no long-lived function call, no local disk.
+
+Building the final MP4 (POST /api/dub/{id}/video) is the exception: it downloads
+the source video, merges it with the MP3, and uploads the result to Vercel Blob
+in one long-lived call, streaming newline-delimited JSON progress events.
 """
 
 import hmac
+import json
 import os
+import queue
+import shutil
+import tempfile
+import threading
+import traceback
 from pathlib import Path
 from typing import Literal
 
@@ -16,6 +26,7 @@ from pydantic import BaseModel, Field
 
 import agent
 import core
+import video_job
 
 PUBLIC_DIR = Path(__file__).resolve().parent / "public"
 
@@ -29,6 +40,11 @@ class DubRequest(BaseModel):
     speakers: int = Field(default=0, ge=0, le=20)
     no_clone: bool = False
     watermark: bool = False
+
+
+class VideoRequest(BaseModel):
+    source: str
+    to: str
 
 
 class ChatMessage(BaseModel):
@@ -158,6 +174,96 @@ def dub_audio(dubbing_id: str, lang: str, filename: str | None = None):
         chunks(),
         media_type="audio/mpeg",
         headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
+
+
+@app.post("/api/dub/{dubbing_id}/video", dependencies=[Depends(require_password)])
+def dub_video(dubbing_id: str, request: VideoRequest) -> StreamingResponse:
+    """Build the final MP4 (original picture + translated audio) and host it on Blob.
+
+    This is the one genuinely long call in the app (tens of seconds up to a few
+    minutes), so it streams newline-delimited JSON progress events: zero or more
+    {"stage": ..., "percent": ...} lines, then exactly one final {"done": ...}
+    or {"error": ...} line. The browser keeps reading until it sees that last one.
+    """
+    if not request.source.startswith(("http://", "https://")):
+        raise HTTPException(
+            status_code=400,
+            detail="The source must be a full URL starting with http:// or https://",
+        )
+    try:
+        target = core.resolve_language(request.to)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from None
+
+    events: queue.Queue[dict] = queue.Queue()
+
+    def work() -> None:
+        """Everything slow happens here; the generator below just relays it."""
+        workspace = Path(tempfile.mkdtemp(prefix="translator-mp4-"))
+        try:
+            job = core.get_dub(dubbing_id)
+            status = job.get("status")
+            if status == "failed":
+                raise video_job.VideoJobError("ElevenLabs could not dub this source, so there is no audio to merge.")
+            if status != "dubbed":
+                raise video_job.VideoJobError("The dub is not ready yet. Wait for the translation to finish, then try again.")
+
+            events.put({"stage": "audio"})
+            audio_path = workspace / "translated.mp3"
+            response = core.open_dub_audio(dubbing_id, target)
+            if response.status_code in (401, 403):
+                response.close()
+                raise video_job.VideoJobError("ElevenLabs rejected the server's API key.")
+            if response.status_code >= 400:
+                response.close()
+                raise video_job.VideoJobError("The translated audio is not ready yet. Wait a moment and try again.")
+            with audio_path.open("wb") as handle:
+                for chunk in response.iter_content(chunk_size=64 * 1024):
+                    handle.write(chunk)
+            response.close()
+
+            video_path, info = video_job.download_source_video(
+                request.source,
+                workspace,
+                lambda stage, percent: events.put({"stage": stage, "percent": percent}),
+            )
+
+            events.put({"stage": "merging"})
+            final_path = workspace / "final.mp4"
+            video_job.mux_with_audio(video_path, audio_path, final_path)
+
+            events.put({"stage": "uploading"})
+            filename = video_job.safe_filename(info.get("title") or "", core.display_name(target))
+            url, download_url = video_job.upload_to_blob(final_path, filename)
+
+            events.put({
+                "done": True,
+                "url": url,
+                "download_url": download_url,
+                "filename": filename,
+                "size": final_path.stat().st_size,
+            })
+        except Exception as error:  # noqa: BLE001 - every failure becomes one final stream event
+            if not isinstance(error, (core.DubbingError, video_job.VideoJobError)):
+                traceback.print_exc()
+            events.put({"error": str(error)})
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    threading.Thread(target=work, daemon=True).start()
+
+    def stream():
+        while True:
+            event = events.get()
+            yield json.dumps(event, ensure_ascii=False) + "\n"
+            if event.get("done") or event.get("error"):
+                return
+
+    return StreamingResponse(
+        stream(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-store"},
     )
 
 

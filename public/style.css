@@ -192,6 +192,39 @@ audio {
   width: 100%;
 }
 
+video {
+  width: 100%;
+  border-radius: var(--radius);
+  background: #000;
+}
+
+#mp4-block {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+#mp4-block h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+#mp4-progress {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+#mp4-progress p {
+  margin: 0;
+}
+
+#mp4-result {
+  display: grid;
+  gap: 10px;
+}
+
 .notice {
   margin-top: 16px;
   padding: 12px 14px;

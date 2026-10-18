@@ -105,13 +105,17 @@ def output_stem(source: str, dubbing_id: str) -> str:
 
 
 def job_payload(source: str, target_lang: str, job: dict) -> dict:
-    """Shape a create-dub response for the browser (form or agent): id, status, filename."""
+    """Shape a create-dub response for the browser (form or agent).
+
+    Includes the source URL because the page needs it later to build the MP4.
+    """
     dubbing_id = job.get("dubbing_id") or ""
     return {
         "dubbing_id": dubbing_id,
         "status": job.get("status"),
         "expected_duration_sec": job.get("expected_duration_sec") or 0,
         "target_lang": target_lang,
+        "source": source,
         "filename": f"{output_stem(source, dubbing_id)} [{display_name(target_lang)}].mp3",
     }
 

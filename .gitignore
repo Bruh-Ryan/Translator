@@ -8,6 +8,7 @@ Saves/
 video/
 translation/
 *.part
+.test-temp/
 
 # Python bytecode
 __pycache__/

@@ -18,6 +18,13 @@ const els = {
   result: document.querySelector("#result"),
   player: document.querySelector("#player"),
   download: document.querySelector("#download"),
+  mp4Block: document.querySelector("#mp4-block"),
+  mp4Button: document.querySelector("#mp4-button"),
+  mp4Progress: document.querySelector("#mp4-progress"),
+  mp4Status: document.querySelector("#mp4-status"),
+  mp4Result: document.querySelector("#mp4-result"),
+  mp4Player: document.querySelector("#mp4-player"),
+  mp4Download: document.querySelector("#mp4-download"),
   error: document.querySelector("#error"),
   tabForm: document.querySelector("#tab-form"),
   tabChat: document.querySelector("#tab-chat"),
@@ -33,6 +40,7 @@ const state = {
   passwordRequired: false,
   jobId: null,
   target: null,
+  source: null,
   filename: null,
   expected: 0,
   startedAt: 0,
@@ -128,6 +136,7 @@ function saveJob() {
   localStorage.setItem("translator-job", JSON.stringify({
     id: state.jobId,
     target: state.target,
+    source: state.source,
     filename: state.filename,
     expected: state.expected,
     startedAt: state.startedAt,
@@ -168,6 +177,7 @@ async function startJob(event) {
   capturePassword();
 
   state.target = els.to.value;
+  state.source = url;
   state.filename = null;
   setBusy(true);
   showProgress("Creating the dubbing job…");
@@ -240,6 +250,7 @@ async function fetchAudio() {
   els.result.classList.remove("hidden");
   setBusy(false);
   clearJob();
+  resetMp4();
 }
 
 function restoreJob() {
@@ -253,6 +264,7 @@ function restoreJob() {
 
   state.jobId = saved.id;
   state.target = saved.target;
+  state.source = saved.source || null;
   state.filename = saved.filename;
   state.expected = saved.expected || 0;
   state.startedAt = saved.startedAt || Date.now();
@@ -358,6 +370,7 @@ async function sendChat(event) {
       // The agent started a job; reuse the same polling/download flow as the form.
       state.jobId = data.job.dubbing_id;
       state.target = data.job.target_lang;
+      state.source = data.job.source || null;
       state.filename = data.job.filename;
       state.expected = data.job.expected_duration_sec || 0;
       state.startedAt = Date.now();
@@ -384,5 +397,107 @@ setInterval(() => {
     els.statusDetail.textContent = progressDetail();
   }
 }, 1000);
+
+const MP4_STAGES = {
+  audio: "Fetching the translated audio…",
+  downloading: "Downloading the source video…",
+  processing: "Finishing the video download…",
+  merging: "Merging the video and audio…",
+  uploading: "Uploading the finished MP4…",
+};
+
+function resetMp4() {
+  els.mp4Block.classList.toggle("hidden", !state.source);
+  els.mp4Button.classList.remove("hidden");
+  els.mp4Button.disabled = false;
+  els.mp4Button.textContent = "Create MP4 video";
+  els.mp4Progress.classList.add("hidden");
+  els.mp4Result.classList.add("hidden");
+  els.mp4Status.textContent = "";
+  els.mp4Player.removeAttribute("src");
+}
+
+function setMp4Stage(text) {
+  els.mp4Progress.classList.remove("hidden");
+  els.mp4Status.textContent = text;
+}
+
+function showMp4(data) {
+  els.mp4Progress.classList.add("hidden");
+  els.mp4Result.classList.remove("hidden");
+  els.mp4Button.classList.add("hidden");
+  els.mp4Player.src = data.url;
+  els.mp4Download.href = data.download_url || data.url;
+  els.mp4Download.download = data.filename || "translated.mp4";
+  const megabytes = data.size ? ` (${(data.size / 1048576).toFixed(1)} MB)` : "";
+  els.mp4Download.textContent = `Download MP4${megabytes}`;
+}
+
+async function createVideo() {
+  if (!state.jobId || !state.source) return;
+  clearError();
+  els.mp4Button.disabled = true;
+  els.mp4Button.textContent = "Building the video…";
+  setMp4Stage("Starting…");
+
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (state.password) headers["x-app-password"] = state.password;
+
+    // The server streams newline-delimited JSON: stage updates, then exactly
+    // one final {"done": ...} or {"error": ...} line.
+    const response = await fetch(`/api/dub/${state.jobId}/video`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ source: state.source, to: state.target }),
+    });
+    if (!response.ok || !response.body) {
+      let detail = `Request failed (${response.status})`;
+      try {
+        const data = await response.json();
+        if (data.detail) {
+          detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+        }
+      } catch {
+        // Not JSON; keep the generic message.
+      }
+      throw new Error(detail);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let finished = null;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newline;
+      while ((newline = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        if (!line) continue;
+        const event = JSON.parse(line);
+        if (event.error) throw new Error(event.error);
+        if (event.done) {
+          finished = event;
+        } else if (event.stage) {
+          const label = MP4_STAGES[event.stage] || "Working…";
+          setMp4Stage(event.percent === null || event.percent === undefined ? label : `${label} ${event.percent}%`);
+        }
+      }
+    }
+    if (!finished) {
+      throw new Error("The server closed the connection before finishing. Try again, or merge locally: python cli.py merge");
+    }
+    showMp4(finished);
+  } catch (error) {
+    resetMp4();
+    handleError(error);
+  }
+}
+
+els.mp4Button.addEventListener("click", createVideo);
 
 init();

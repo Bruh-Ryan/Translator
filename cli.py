@@ -13,6 +13,7 @@ import sys
 import time
 
 import core  # Core loads .env on import, so VIDEO_DIR/TRANSLATION_DIR are ready below.
+import video_job  # Shared yt-dlp/FFmpeg helpers (also used by the web app).
 
 
 URL = "https://youtu.be/VD6xJq8NguY?si=eywi8Z34jWOnAUUP"
@@ -52,15 +53,23 @@ def download_video(url: str) -> Path | None:
         "outtmpl": str(VIDEO_DIR / "%(title)s.%(ext)s"),
         "format": "bestvideo[ext=mp4]/bestvideo",
         "noplaylist": True,
+        **video_job.js_runtime_options(),  # YouTube needs a JS runtime (Node/QuickJS).
     }
 
-    with yt_dlp.YoutubeDL(options) as ydl:
-        info = ydl.extract_info(url, download=False)
-        # Allow headroom for the source audio and the temporary MP3 conversion.
-        estimated_size = info.get("filesize") or info.get("filesize_approx") or 0
-        ensure_space(VIDEO_DIR, max(100 * 1024**2, estimated_size * 2))
-        ydl.download([url])
-        output = Path(ydl.prepare_filename(info))
+    try:
+        with yt_dlp.YoutubeDL(options) as ydl:
+            info = ydl.extract_info(url, download=False)
+            # Allow headroom for the source audio and the temporary MP3 conversion.
+            estimated_size = info.get("filesize") or info.get("filesize_approx") or 0
+            ensure_space(VIDEO_DIR, max(100 * 1024**2, estimated_size * 2))
+            ydl.download([url])
+            output = Path(ydl.prepare_filename(info))
+    except SystemExit:
+        # yt-dlp calls sys.exit instead of raising on several download failures.
+        raise RuntimeError(
+            "yt-dlp stopped early; YouTube sometimes blocks download challenges. Try again, "
+            "or install Node.js 22+ (or put qjs on PATH) so the JavaScript challenge can be solved."
+        ) from None
 
     return output if output.exists() else None
 

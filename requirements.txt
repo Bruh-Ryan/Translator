@@ -1,7 +1,8 @@
 fastapi
+imageio-ffmpeg  # bundled static FFmpeg for the web app's MP4 build on Vercel
 mcp       # only needed to run mcp_server.py
 openai    # only needed for the web app's chat assistant (LLM_API_KEY)
 python-dotenv
 requests
 uvicorn
-yt-dlp
+yt-dlp[default]  # [default] pulls yt-dlp-ejs, which solves YouTube's JS challenges

@@ -63,7 +63,8 @@ form {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   padding: 10px 12px;
   background: #10131a;
@@ -73,8 +74,13 @@ select {
   font: inherit;
 }
 
+textarea {
+  resize: vertical;
+}
+
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   border-color: var(--accent);
@@ -210,4 +216,72 @@ footer {
   margin-top: 20px;
   border-top: 1px solid var(--border);
   padding-top: 14px;
+}
+
+/* --- Chat mode --- */
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tab {
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.tab:hover {
+  background: #1d2130;
+  color: var(--text);
+}
+
+.tab.active,
+.tab.active:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+#password-field {
+  margin-bottom: 14px;
+}
+
+#chat-messages {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin-bottom: 14px;
+}
+
+#chat-messages:empty {
+  display: none;
+}
+
+.msg {
+  max-width: 85%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.msg.user {
+  justify-self: end;
+  background: #1d2130;
+}
+
+.msg.assistant {
+  justify-self: start;
+  background: #10131a;
+}
+
+.msg.pending {
+  color: var(--muted);
 }

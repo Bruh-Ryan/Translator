@@ -19,6 +19,13 @@ const els = {
   player: document.querySelector("#player"),
   download: document.querySelector("#download"),
   error: document.querySelector("#error"),
+  tabForm: document.querySelector("#tab-form"),
+  tabChat: document.querySelector("#tab-chat"),
+  chatPanel: document.querySelector("#chat-panel"),
+  chatMessages: document.querySelector("#chat-messages"),
+  chatForm: document.querySelector("#chat-form"),
+  chatInput: document.querySelector("#chat-input"),
+  chatSend: document.querySelector("#chat-send"),
 };
 
 const state = {
@@ -131,6 +138,14 @@ function clearJob() {
   localStorage.removeItem("translator-job");
 }
 
+function capturePassword() {
+  const typedPassword = els.password.value.trim();
+  if (typedPassword) {
+    state.password = typedPassword;
+    localStorage.setItem("translator-password", typedPassword);
+  }
+}
+
 function handleError(error) {
   if (error.status === 401) {
     els.passwordField.classList.remove("hidden");
@@ -150,11 +165,7 @@ async function startJob(event) {
     return;
   }
 
-  const typedPassword = els.password.value.trim();
-  if (typedPassword) {
-    state.password = typedPassword;
-    localStorage.setItem("translator-password", typedPassword);
-  }
+  capturePassword();
 
   state.target = els.to.value;
   state.filename = null;
@@ -282,12 +293,90 @@ async function init() {
       els.to.value = "hi";
     }
     fillLanguages(els.sourceLang, config.languages, true);
+    if (config.agent_enabled) {
+      els.tabChat.classList.remove("hidden");
+    }
   } catch (error) {
     showError(`Could not load the app configuration (${error.message}). If you just deployed, check the function in the Vercel dashboard.`);
   }
 
   restoreJob();
 }
+
+let chatHistory = [];
+
+function setMode(mode) {
+  const useChat = mode === "chat";
+  els.form.classList.toggle("hidden", useChat);
+  els.chatPanel.classList.toggle("hidden", !useChat);
+  els.tabForm.classList.toggle("active", !useChat);
+  els.tabChat.classList.toggle("active", useChat);
+  els.tabForm.setAttribute("aria-selected", String(!useChat));
+  els.tabChat.setAttribute("aria-selected", String(useChat));
+  if (useChat) els.chatInput.focus();
+}
+
+function appendMessage(role, text) {
+  const message = document.createElement("div");
+  message.className = `msg ${role}`;
+  message.textContent = text;
+  els.chatMessages.append(message);
+  els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+  return message;
+}
+
+async function sendChat(event) {
+  event.preventDefault();
+  clearError();
+
+  const text = els.chatInput.value.trim();
+  if (!text) return;
+  capturePassword();
+
+  els.chatInput.value = "";
+  appendMessage("user", text);
+  chatHistory.push({ role: "user", content: text });
+
+  els.chatSend.disabled = true;
+  els.chatSend.textContent = "Thinking…";
+  const pending = appendMessage("assistant", "…");
+  pending.classList.add("pending");
+
+  try {
+    const response = await api("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ messages: chatHistory.slice(-16) }),
+    });
+    const data = await response.json();
+
+    pending.classList.remove("pending");
+    pending.textContent = data.reply || "(no reply)";
+    els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+    chatHistory.push({ role: "assistant", content: data.reply || "" });
+
+    if (data.job && data.job.dubbing_id) {
+      // The agent started a job; reuse the same polling/download flow as the form.
+      state.jobId = data.job.dubbing_id;
+      state.target = data.job.target_lang;
+      state.filename = data.job.filename;
+      state.expected = data.job.expected_duration_sec || 0;
+      state.startedAt = Date.now();
+      saveJob();
+      showProgress("Waiting for ElevenLabs…", progressDetail());
+      poll();
+    }
+  } catch (error) {
+    pending.remove();
+    handleError(error);
+  } finally {
+    els.chatSend.disabled = false;
+    els.chatSend.textContent = "Send";
+  }
+}
+
+els.tabForm.addEventListener("click", () => setMode("form"));
+els.tabChat.addEventListener("click", () => setMode("chat"));
+els.chatForm.addEventListener("submit", sendChat);
 
 els.form.addEventListener("submit", startJob);
 setInterval(() => {

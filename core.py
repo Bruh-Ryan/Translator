@@ -104,6 +104,18 @@ def output_stem(source: str, dubbing_id: str) -> str:
     return Path(source).stem
 
 
+def job_payload(source: str, target_lang: str, job: dict) -> dict:
+    """Shape a create-dub response for the browser (form or agent): id, status, filename."""
+    dubbing_id = job.get("dubbing_id") or ""
+    return {
+        "dubbing_id": dubbing_id,
+        "status": job.get("status"),
+        "expected_duration_sec": job.get("expected_duration_sec") or 0,
+        "target_lang": target_lang,
+        "filename": f"{output_stem(source, dubbing_id)} [{display_name(target_lang)}].mp3",
+    }
+
+
 def create_dub(source: str, target_lang: str, source_lang: str | None = None,
                speakers: int = 0, no_clone: bool = False, watermark: bool = False) -> dict:
     """Upload the audio (or a URL) and start a dubbing job. Returns the job JSON."""

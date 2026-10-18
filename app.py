@@ -8,11 +8,13 @@ then streams the finished MP3 back — no long-lived function call, no local dis
 import hmac
 import os
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+import agent
 import core
 
 PUBLIC_DIR = Path(__file__).resolve().parent / "public"
@@ -27,6 +29,15 @@ class DubRequest(BaseModel):
     speakers: int = Field(default=0, ge=0, le=20)
     no_clone: bool = False
     watermark: bool = False
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage] = Field(min_length=1, max_length=24)
 
 
 def require_password(request: Request) -> None:
@@ -50,6 +61,7 @@ def get_config() -> dict:
     return {
         "password_required": bool(os.getenv("APP_PASSWORD")),
         "api_key_set": core.api_key_set(),
+        "agent_enabled": agent.agent_enabled(),
         "languages": [
             {"code": code, "name": name.title()}
             for name, code in sorted(core.LANGUAGES.items())
@@ -79,17 +91,10 @@ def start_dub(request: DubRequest) -> dict:
     except core.DubbingError as error:
         raise elevenlabs_failure(error) from None
 
-    dubbing_id = job.get("dubbing_id")
-    if not dubbing_id:
+    if not job.get("dubbing_id"):
         raise HTTPException(status_code=502, detail="ElevenLabs did not return a dubbing job id.")
 
-    return {
-        "dubbing_id": dubbing_id,
-        "status": job.get("status"),
-        "expected_duration_sec": job.get("expected_duration_sec") or 0,
-        "target_lang": target,
-        "filename": f"{core.output_stem(request.url, dubbing_id)} [{core.display_name(target)}].mp3",
-    }
+    return core.job_payload(request.url, target, job)
 
 
 @app.get("/api/dub/{dubbing_id}", dependencies=[Depends(require_password)])
@@ -103,6 +108,25 @@ def dub_status(dubbing_id: str) -> dict:
         "status": job.get("status"),
         "expected_duration_sec": job.get("expected_duration_sec") or 0,
     }
+
+
+@app.post("/api/chat", dependencies=[Depends(require_password)])
+def chat(request: ChatRequest) -> dict:
+    """Natural-language front door: the agent picks the options and starts the job."""
+    if not agent.agent_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="The chat agent is not configured on this server. Set LLM_API_KEY (and optionally LLM_MODEL / LLM_BASE_URL), then try again.",
+        )
+
+    messages = [message.model_dump() for message in request.messages]
+    if messages[-1]["role"] != "user":
+        raise HTTPException(status_code=400, detail="The last message must come from the user.")
+
+    try:
+        return agent.run(messages)
+    except agent.AgentError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from None
 
 
 @app.get("/api/dub/{dubbing_id}/audio", dependencies=[Depends(require_password)])

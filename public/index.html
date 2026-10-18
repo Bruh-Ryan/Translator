@@ -11,17 +11,22 @@
   <main class="card">
     <header>
       <h1>Video Translator</h1>
-      <p class="subtitle">Paste a video link, pick a language, and download the dubbed MP3. Powered by the ElevenLabs Dubbing API.</p>
+      <p class="subtitle">Paste a video link — or just describe what you want — and download the dubbed MP3. Powered by the ElevenLabs Dubbing API.</p>
     </header>
 
     <div id="setup-warning" class="notice warn hidden" role="alert"></div>
 
-    <form id="dub-form">
-      <label id="password-field" class="field hidden">
-        <span>Password</span>
-        <input type="password" id="password" autocomplete="current-password" placeholder="Shared password">
-      </label>
+    <label id="password-field" class="field hidden">
+      <span>Password</span>
+      <input type="password" id="password" autocomplete="current-password" placeholder="Shared password">
+    </label>
 
+    <div class="tabs" role="tablist">
+      <button type="button" id="tab-form" class="tab active" role="tab" aria-selected="true">Form</button>
+      <button type="button" id="tab-chat" class="tab hidden" role="tab" aria-selected="false">Chat</button>
+    </div>
+
+    <form id="dub-form">
       <label class="field">
         <span>Video URL</span>
         <input type="url" id="url" placeholder="https://youtu.be/…" required>
@@ -57,6 +62,17 @@
       <button type="submit" id="submit">Translate</button>
     </form>
 
+    <section id="chat-panel" class="hidden">
+      <div id="chat-messages" aria-live="polite"></div>
+      <form id="chat-form">
+        <label class="field">
+          <span>What do you need?</span>
+          <textarea id="chat-input" rows="2" maxlength="4000" placeholder="e.g. Dub this video into Tamil: https://youtu.be/…"></textarea>
+        </label>
+        <button type="submit" id="chat-send">Send</button>
+      </form>
+    </section>
+
     <section id="progress" class="hidden" aria-live="polite">
       <div class="spinner" aria-hidden="true"></div>
       <div>
@@ -69,7 +85,7 @@
       <h2>Translation ready</h2>
       <audio id="player" controls></audio>
       <a id="download" class="button" download>Download MP3</a>
-      <p class="muted">This is the dubbed audio only. To combine it with the source video, run the FFmpeg command from the README on your machine.</p>
+      <p class="muted">This is the dubbed audio only. To combine it with the source video, run <code>python cli.py merge</code> (or the FFmpeg command from the README) on your machine.</p>
     </section>
 
     <div id="error" class="notice error hidden" role="alert"></div>

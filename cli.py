@@ -12,15 +12,16 @@ import subprocess
 import sys
 import time
 
-import yt_dlp
-
 import core  # Core loads .env on import, so VIDEO_DIR/TRANSLATION_DIR are ready below.
 
 
 URL = "https://youtu.be/VD6xJq8NguY?si=eywi8Z34jWOnAUUP"
+PROJECT_DIR = Path(__file__).resolve().parent
 # Keep the source video and generated translations separate on the project drive.
-VIDEO_DIR = Path(os.environ.get("VIDEO_DIR", Path.cwd() / "video"))
-TRANSLATION_DIR = Path(os.environ.get("TRANSLATION_DIR", Path.cwd() / "translation"))
+# Defaults sit next to this file (not the current directory), so the CLI, the web
+# app, and mcp_server.py always share the same video/ and translation/ folders.
+VIDEO_DIR = Path(os.environ.get("VIDEO_DIR", PROJECT_DIR / "video"))
+TRANSLATION_DIR = Path(os.environ.get("TRANSLATION_DIR", PROJECT_DIR / "translation"))
 
 # File types the merge step knows how to look for on its own.
 VIDEO_EXTENSIONS = {".mp4", ".webm", ".mkv", ".mov", ".m4v"}
@@ -41,6 +42,8 @@ def ensure_space(directory: Path, required_bytes: int) -> None:
 
 def download_video(url: str) -> Path | None:
     """Download a video-only source into video/ and return its file path."""
+    import yt_dlp  # Lazy: dubbing and merging do not need yt-dlp installed.
+
     VIDEO_DIR.mkdir(parents=True, exist_ok=True)
 
     # A video-only source is enough for the final FFmpeg export: the dubbed
@@ -76,7 +79,7 @@ def newest_file(directory: Path, extensions: set[str]) -> Path | None:
 def _newest_in_project(extensions: set[str]) -> Path | None:
     """Newest matching file anywhere below the project, skipping tool folders."""
     files: list[Path] = []
-    for root, dirs, names in os.walk(Path.cwd()):
+    for root, dirs, names in os.walk(PROJECT_DIR):
         dirs[:] = [name for name in dirs if name not in EXCLUDED_DIRS]
         files.extend(
             Path(root) / name for name in names if Path(name).suffix.lower() in extensions

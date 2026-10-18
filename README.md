@@ -2,7 +2,7 @@
 
 Download a video-only source from YouTube, translate its spoken content with the ElevenLabs Dubbing API, then replace the video's audio with the translated track.
 
-There are two front ends for that flow: the `cli.py` command line, and a small FastAPI web page (`app.py` + `public/`) that runs the dubbing step in a browser and deploys to Vercel.
+There are three front doors for that flow: the `cli.py` command line (it also does the FFmpeg merge), a small FastAPI web page (`app.py` + `public/`) that runs the dubbing step in a browser and deploys to Vercel, and an MCP server (`mcp_server.py`) that exposes the whole pipeline — download, dub, merge — as tools for local agents such as OpenCode.
 
 ## What it does
 
@@ -52,12 +52,28 @@ uvicorn app:app --reload
 
 Then open http://127.0.0.1:8000 in a browser.
 
+### Chat assistant (optional)
+
+With an LLM key set, the page shows a **Chat** tab next to the form. Instead of filling in fields, you can write "dub this into Tamil: https://youtu.be/…" and the assistant works out the language and options itself, asks follow-up questions when something is missing, and starts the same dubbing job the form would. Without a key the tab stays hidden and the page behaves exactly as before.
+
+Set the variables in `.env` (locally) or in the Vercel project settings:
+
+```env
+LLM_API_KEY=your_llm_api_key
+# Optional:
+LLM_MODEL=gpt-4.1-mini                       # default model
+LLM_BASE_URL=https://openrouter.ai/api/v1    # any OpenAI-compatible endpoint
+```
+
+The chat only starts the job; the MP3 still arrives through the same polling and download flow as the form, and the final MP4 merge stays on your machine.
+
 ### Deploy to Vercel
 
 1. Import this repository at [vercel.com/new](https://vercel.com/new). Vercel detects FastAPI automatically; keep the default settings.
 2. In **Settings → Environment Variables**, add:
    - `ELEVENLABS_API_KEY` — your API key (`.env` is never deployed).
    - `APP_PASSWORD` — optional. When set, visitors must type this shared password before the page can spend any credits.
+   - `LLM_API_KEY` (plus optional `LLM_MODEL`, `LLM_BASE_URL`) — optional. Enables the chat assistant; see above.
 3. Deploy, or redeploy after adding the variables.
 
 The page creates an ElevenLabs job, then polls it from the browser until the audio is ready — no long-running server process and no storage needed.
@@ -67,6 +83,42 @@ The page creates an ElevenLabs job, then polls it from the browser until the aud
 - Vercel caps function responses at about 4.5 MB, so very long videos may not download through the browser. Use the CLI for those.
 - Video downloads, file uploads, and the final MP4 merge stay on your machine.
 - Unless `APP_PASSWORD` is set, anyone who can open the URL can spend your ElevenLabs credits.
+- The chat assistant adds a language-model round trip to each message. If a turn times out on Vercel, raise the function's max duration in the Vercel project settings.
+
+## MCP server (local agents)
+
+`mcp_server.py` exposes the local pipeline as MCP tools, so an agent such as OpenCode or Claude Desktop can run it on your machine — download, dub, wait, save, and merge.
+
+Run it directly (it speaks MCP over stdio):
+
+```powershell
+python mcp_server.py
+```
+
+Connect it in OpenCode from this project:
+
+```powershell
+opencode mcp add translator -- .venv\Scripts\python.exe mcp_server.py
+```
+
+Or add it to `opencode.json` by hand:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "translator": {
+        "type": "local",
+        "command": [".venv/Scripts/python.exe", "mcp_server.py"],
+        "cwd": "."
+      }
+    }
+  }
+}
+```
+
+Tools: `list_languages`, `download_video`, `start_dub`, `dub_status`, `save_dub_audio`, `dub_and_wait`, `merge_video`, and `translate_video` (one call for the whole download → dub → merge run).
 
 ## Usage
 
@@ -154,9 +206,11 @@ ffmpeg -i "video\source.mp4" `
 
 ```text
 translator/
-├── cli.py             # Command line: download sources and dub them
+├── cli.py             # Command line: download sources, dub, merge
 ├── core.py            # Shared ElevenLabs dubbing logic
 ├── app.py             # FastAPI web app (the Vercel entrypoint)
+├── agent.py           # Chat assistant for app.py (needs LLM_API_KEY)
+├── mcp_server.py      # MCP tools for local agents (OpenCode, Claude Desktop)
 ├── public/            # Frontend: index.html, style.css, app.js
 ├── requirements.txt
 ├── .env               # Your local API key (not committed)
@@ -173,6 +227,8 @@ translator/
 | `quota_exceeded` | Dub a shorter source or add ElevenLabs credits. |
 | `No space left on device` | Clear disk space or set `VIDEO_DIR` / `TRANSLATION_DIR` to a drive with space. |
 | `Wrong or missing password` | Enter the `APP_PASSWORD` you set in Vercel, or remove that variable to leave the page open. |
+| `The chat agent is not configured` | Set `LLM_API_KEY` (plus optional `LLM_MODEL`, `LLM_BASE_URL`) in the environment and restart or redeploy. |
+| `The language model request failed` | Check `LLM_API_KEY`, `LLM_MODEL`, and `LLM_BASE_URL`; the endpoint must be OpenAI-compatible. |
 | `The server has no ElevenLabs API key yet` | Add `ELEVENLABS_API_KEY` in Vercel → Settings → Environment Variables, then redeploy. |
 | Vercel asks for a login before the page loads | Deployment Protection is on (Vercel → Settings → Deployment Protection). Turn it off, or log in with the Vercel account that owns the project. |
 
@@ -184,6 +240,8 @@ By default, files are stored under the project directory. Override either locati
 $env:VIDEO_DIR = "E:\VideoTranslator\video"
 $env:TRANSLATION_DIR = "E:\VideoTranslator\translation"
 ```
+
+The web app's chat assistant reads `LLM_API_KEY`, `LLM_MODEL` (default: `gpt-4.1-mini`), and `LLM_BASE_URL` from the same environment.
 
 ## Notes
 

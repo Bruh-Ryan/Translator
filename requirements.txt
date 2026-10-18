@@ -1,4 +1,6 @@
 fastapi
+mcp       # only needed to run mcp_server.py
+openai    # only needed for the web app's chat assistant (LLM_API_KEY)
 python-dotenv
 requests
 uvicorn

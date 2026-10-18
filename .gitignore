@@ -1,0 +1,10 @@
+# Local secrets
+.env
+.venv/.env
+
+# Virtual environment and generated media
+.venv/
+Saves/
+video/
+translation/
+*.part

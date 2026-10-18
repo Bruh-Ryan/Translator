@@ -10,8 +10,7 @@ import os
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 import core
@@ -138,5 +137,20 @@ def dub_audio(dubbing_id: str, lang: str, filename: str | None = None):
     )
 
 
-# Mounted last so the /api routes above win; html=True serves index.html at "/".
-app.mount("/", StaticFiles(directory=PUBLIC_DIR, html=True), name="static")
+# The frontend in public/ is served by Vercel's CDN at these root paths, and
+# Vercel explicitly warns against mounting that directory from FastAPI. These
+# three routes cover local runs (`uvicorn app:app`) and act as a safety net if
+# the CDN ever misses a file; on Vercel the CDN copy usually answers first.
+@app.get("/", include_in_schema=False)
+def index() -> FileResponse:
+    return FileResponse(PUBLIC_DIR / "index.html", media_type="text/html")
+
+
+@app.get("/app.js", include_in_schema=False)
+def app_js() -> FileResponse:
+    return FileResponse(PUBLIC_DIR / "app.js", media_type="text/javascript")
+
+
+@app.get("/style.css", include_in_schema=False)
+def style_css() -> FileResponse:
+    return FileResponse(PUBLIC_DIR / "style.css", media_type="text/css")

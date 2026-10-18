@@ -252,7 +252,18 @@ function restoreJob() {
 
 async function init() {
   try {
-    const config = await (await fetch("/api/config")).json();
+    const response = await fetch("/api/config");
+    const body = await response.text();
+    let config = null;
+    try {
+      config = JSON.parse(body);
+    } catch {
+      // Not JSON — most likely an error page from the host.
+    }
+    if (!response.ok || !config || !Array.isArray(config.languages)) {
+      const snippet = body.slice(0, 120).replace(/\s+/g, " ").trim();
+      throw new Error(`HTTP ${response.status}${snippet ? ` — ${snippet}` : ""}`);
+    }
     state.passwordRequired = config.password_required;
 
     if (state.passwordRequired) {
@@ -271,8 +282,8 @@ async function init() {
       els.to.value = "hi";
     }
     fillLanguages(els.sourceLang, config.languages, true);
-  } catch {
-    showError("Could not load the app configuration. Is the server running?");
+  } catch (error) {
+    showError(`Could not load the app configuration (${error.message}). If you just deployed, check the function in the Vercel dashboard.`);
   }
 
   restoreJob();

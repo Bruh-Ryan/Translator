@@ -1,5 +1,5 @@
 fastapi
 python-dotenv
 requests
-uvicorn  # only needed to serve app.py locally
+uvicorn
 yt-dlp

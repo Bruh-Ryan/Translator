@@ -145,6 +145,7 @@ translator/
 | `No space left on device` | Clear disk space or set `VIDEO_DIR` / `TRANSLATION_DIR` to a drive with space. |
 | `Wrong or missing password` | Enter the `APP_PASSWORD` you set in Vercel, or remove that variable to leave the page open. |
 | `The server has no ElevenLabs API key yet` | Add `ELEVENLABS_API_KEY` in Vercel → Settings → Environment Variables, then redeploy. |
+| Vercel asks for a login before the page loads | Deployment Protection is on (Vercel → Settings → Deployment Protection). Turn it off, or log in with the Vercel account that owns the project. |
 
 ## Configuration
 

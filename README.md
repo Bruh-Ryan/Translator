@@ -97,6 +97,7 @@ Common options:
 --watermark        Allow an ElevenLabs watermark when required by the account plan.
 --no-clone         Use a similar library voice instead of cloning the source speaker.
 --out FILE.mp3     Choose a custom output path.
+--merge            Also download the video and save the final MP4 in one step.
 ```
 
 See all commands:
@@ -108,7 +109,35 @@ python cli.py dub -h
 
 ### 3. Export the translated video
 
-Replace the paths with the filenames created in `video/` and `translation/`:
+Download the source video if you have not already (the copy in `video/` has no audio by design):
+
+```powershell
+python cli.py download "https://youtu.be/VIDEO_ID"
+```
+
+Then merge it with the translated MP3:
+
+```powershell
+python cli.py merge
+```
+
+`merge` picks the newest video in `video/` and the newest MP3 in `translation/` (falling back to the newest MP3 anywhere in the project) and writes the MP4 next to the audio. Pass the files explicitly when the automatic pick is not the one you want:
+
+```powershell
+python cli.py merge --video "video\source.mp4" --audio "translation\source [English].mp3" --out "translation\final.mp4"
+```
+
+Add `--force` to overwrite an existing output.
+
+You can also do everything in one command by adding `--merge` to `dub`; it downloads the video and merges as soon as the dub finishes:
+
+```powershell
+python cli.py dub "https://youtu.be/VIDEO_ID" --to en --merge
+```
+
+#### The same merge with plain FFmpeg
+
+Replace the paths with your own filenames:
 
 ```powershell
 ffmpeg -i "video\source.mp4" `
@@ -119,7 +148,7 @@ ffmpeg -i "video\source.mp4" `
   "translation\source [English].mp4"
 ```
 
-`-c:v copy` keeps the original video stream without re-encoding it. The final MP4 is saved in `translation/`.
+`-c:v copy` keeps the original video stream without re-encoding it. The translated audio replaces the original track entirely, because the downloaded source has no audio.
 
 ## Project layout
 

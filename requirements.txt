@@ -1,3 +1,5 @@
-yt-dlp
-requests
+fastapi
 python-dotenv
+requests
+uvicorn  # only needed to serve app.py locally
+yt-dlp

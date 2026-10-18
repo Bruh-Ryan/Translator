@@ -8,3 +8,10 @@ Saves/
 video/
 translation/
 *.part
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Vercel CLI link data
+.vercel

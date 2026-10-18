@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video Translator</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="card">
+    <header>
+      <h1>Video Translator</h1>
+      <p class="subtitle">Paste a video link, pick a language, and download the dubbed MP3. Powered by the ElevenLabs Dubbing API.</p>
+    </header>
+
+    <div id="setup-warning" class="notice warn hidden" role="alert"></div>
+
+    <form id="dub-form">
+      <label id="password-field" class="field hidden">
+        <span>Password</span>
+        <input type="password" id="password" autocomplete="current-password" placeholder="Shared password">
+      </label>
+
+      <label class="field">
+        <span>Video URL</span>
+        <input type="url" id="url" placeholder="https://youtu.be/…" required>
+      </label>
+
+      <label class="field">
+        <span>Translate into</span>
+        <select id="to" required></select>
+      </label>
+
+      <details class="advanced">
+        <summary>Advanced options</summary>
+        <div class="grid">
+          <label class="field">
+            <span>Source language</span>
+            <select id="source-lang"></select>
+          </label>
+          <label class="field">
+            <span>Speakers (0 = auto-detect)</span>
+            <input type="number" id="speakers" value="0" min="0" max="20">
+          </label>
+          <label class="check">
+            <input type="checkbox" id="no-clone">
+            <span>Use a similar library voice instead of cloning the speaker</span>
+          </label>
+          <label class="check">
+            <input type="checkbox" id="watermark">
+            <span>Allow a watermark if the account plan requires one</span>
+          </label>
+        </div>
+      </details>
+
+      <button type="submit" id="submit">Translate</button>
+    </form>
+
+    <section id="progress" class="hidden" aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <div>
+        <p id="status-line">Starting…</p>
+        <p id="status-detail" class="muted"></p>
+      </div>
+    </section>
+
+    <section id="result" class="hidden">
+      <h2>Translation ready</h2>
+      <audio id="player" controls></audio>
+      <a id="download" class="button" download>Download MP3</a>
+      <p class="muted">This is the dubbed audio only. To combine it with the source video, run the FFmpeg command from the README on your machine.</p>
+    </section>
+
+    <div id="error" class="notice error hidden" role="alert"></div>
+
+    <footer class="muted">
+      Downloads and the final MP4 merge stay on your machine — this page only produces the translated MP3.
+    </footer>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
